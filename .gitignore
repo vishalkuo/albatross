@@ -1,0 +1,5 @@
+*.zip
+out/
+env/
+.DS_STORE
+.vscode/
