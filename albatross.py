@@ -5,6 +5,7 @@ import boto3
 import json
 import os
 import urllib.parse as urlparse
+from typing import Optional
 
 
 logger = logging.getLogger()
@@ -49,8 +50,11 @@ def post(event, context):
 
         cmd = body["text"][0]
         body = ""
+        client = boto3.client("ec2")
         if cmd == STATUS:
-            body = _process_status()
+            body = _process_status(client)
+        elif cmd == DOWN:
+            body = _process_down(client)
 
         response = {"text": body, "response_type": "in_channel"}
 
@@ -61,22 +65,37 @@ def post(event, context):
         return response
 
 
-def _process_status():
-    reservations = _get_ec2_instances()["Reservations"]
+def _process_down(client) -> str:
+    server = _find_devserver(client)
+    if not server:
+        return "No devserver found"
+    try:
+        client.stop_instances(InstanceIds=[server["InstanceId"]])
+    except Exception as e:
+        return f"Error stopping instance: `{e}``"
+    return "Stopping..."
+
+
+def _process_status(client) -> str:
+    server = _find_devserver(client)
+    if not server:
+        return "Not found, please start"
+    return server["State"]["Name"]
+
+
+def _find_devserver(client) -> Optional[any]:
+    reservations = _get_ec2_instances(client)["Reservations"]
     if (
         not reservations
         or not reservations[0]["Instances"]
         or not reservations[0]["Instances"][0]
     ):
-        return "Not found, please start"
+        return None
 
-    server = reservations[0]["Instances"][0]
-
-    return server["State"]["Name"]
+    return reservations[0]["Instances"][0]
 
 
-def _get_ec2_instances():
-    client = boto3.client("ec2")
+def _get_ec2_instances(client):
     return client.describe_instances(
         Filters=[{"Name": "tag:application", "Values": [DEVSERVER]}]
     )
