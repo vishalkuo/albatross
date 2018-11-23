@@ -1,16 +1,21 @@
 import hashlib
 import hmac
 import logging
-
+import boto3
 import json
 import os
+import urllib.parse as urlparse
 
 
 logger = logging.getLogger()
 logger.setLevel(logging.WARNING)
 
 
-slack_signing_secret = os.environ["SLACK_KEY"]
+UP, DOWN, STATUS = "up", "down", "status"
+COMMANDS = set([UP, DOWN, STATUS])
+DEVSERVER = "devserver"
+
+slack_signing_secret = os.environ.get("SLACK_KEY")
 
 
 def verify_slack_request(
@@ -37,8 +42,41 @@ def post(event, context):
             response = {"statusCode": 401, "body": "Unauthorized"}
             return response
 
-        return {"statusCode": 200, "body": json.dumps({"text": "foo"})}
+        body = urlparse.parse_qs(event["body"])
+        if not body["text"] or body["text"][0] not in COMMANDS:
+            text = f"Invalid command, please try {COMMANDS}"
+            return {"statusCode": 200, "body": json.dumps({"text": text})}
+
+        cmd = body["text"][0]
+        body = ""
+        if cmd == STATUS:
+            body = _process_status()
+
+        response = {"text": body, "response_type": "in_channel"}
+
+        return {"statusCode": 200, "body": json.dumps(response)}
 
     except Exception as e:
-        response = {"statusCode": 400, "body": "Error: {e}"}
+        response = {"statusCode": 400, "body": f"Error: {e}"}
         return response
+
+
+def _process_status():
+    reservations = _get_ec2_instances()["Reservations"]
+    if (
+        not reservations
+        or not reservations[0]["Instances"]
+        or not reservations[0]["Instances"][0]
+    ):
+        return "Not found, please start"
+
+    server = reservations[0]["Instances"][0]
+
+    return server["State"]["Name"]
+
+
+def _get_ec2_instances():
+    client = boto3.client("ec2")
+    return client.describe_instances(
+        Filters=[{"Name": "tag:application", "Values": [DEVSERVER]}]
+    )
