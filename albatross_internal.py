@@ -16,9 +16,9 @@ def handle(event, context):
     client = boto3.client("ec2")
     logger.warn(f"Received event {event}")
 
-    server = aws.find_devserver(client)
+    server = aws.find_devserver(client, non_terminated=True)
     if not server:
-        return {"statusCode": 400, "body": "Server not found"}
+        return {"statusCode": 200, "body": "Server not found"}
     if event["detail-type"] == "EC2 Instance State-change Notification":
         return _process_instance_state_change(client, event, server)
     if event["detail-type"] == "Scheduled Event":
@@ -29,7 +29,7 @@ def handle(event, context):
 
 def _process_cron(client, event, server):
     images = aws.get_images(client)
-    if not images["Images"]:
+    if not images["Images"] or server["State"]["Name"] == "terminated":
         return {"statusCode": 200, "body": "noop"}
 
     image = images["Images"][0]

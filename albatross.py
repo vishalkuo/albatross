@@ -72,7 +72,7 @@ def _process_down(client) -> str:
 
 
 def _process_status(client) -> str:
-    server = aws.find_devserver(client)
+    server = aws.find_devserver(client, non_terminated=True)
     if not server:
         return "Not found, please start"
     return server["State"]["Name"]
