@@ -1,20 +1,30 @@
 import constants
 from typing import Optional
+import time
 
-
+# TODO(vishalkuo): refactor to remove custom filters
 devserver_filter = {"Name": "tag:application", "Values": [constants.DEVSERVER]}
 state_filter = {
     "Name": "instance-state-name",
-    "Values": ["pending", "running", "shutting-down", "stopping", "stopped"],
+    "Values": ["pending", "running", "stopping", "stopped"],
+}
+image_filter = {
+    "Name": f"tag:{constants.ALBATROSS_STATUS}",
+    "Values": [constants.MARKED_FOR_DELETION],
 }
 
 
 def create_image(client, instance_id: str):
-    return client.create_image(InstanceId=instance_id, Name="albatross")
+    return client.create_image(
+        InstanceId=instance_id, Name=f"albatross-{int(time.time())}"
+    )
 
 
-def get_images(client):
-    return client.describe_images(Filters=[devserver_filter])
+def get_images(client, include_deleted: bool = True):
+    filters = [devserver_filter]
+    if include_deleted:
+        filters.append(image_filter)
+    return client.describe_images(Filters=filters)
 
 
 def find_devserver(client, non_terminated=False) -> Optional[any]:

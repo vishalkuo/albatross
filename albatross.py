@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import logging
 import boto3
 import json
@@ -8,33 +6,20 @@ import urllib.parse as urlparse
 from typing import Optional
 import constants
 import aws
+import slack
 
 
 logger = logging.getLogger()
 logger.setLevel(logging.WARNING)
 
-
-def verify_slack_request(
-    slack_signature=None, slack_request_timestamp=None, request_body=None
-):
-    basestring = f"v0:{slack_request_timestamp}:{request_body}".encode("utf-8")
-    s = bytes(constants.SLACK_SIGNING_SECRET, "utf-8")
-    sig = "v0=" + hmac.new(s, basestring, hashlib.sha256).hexdigest()
-
-    if hmac.compare_digest(sig, slack_signature):
-        return True
-    else:
-        return False
-
-
+# TODO(vishalkuo): handle try except better
+# TODO(vishalkuo): create a generic context with client/resource.
 def handle(event, context):
     try:
         slack_signature = event["headers"]["X-Slack-Signature"]
         slack_request_timestamp = event["headers"]["X-Slack-Request-Timestamp"]
 
-        if not verify_slack_request(
-            slack_signature, slack_request_timestamp, event["body"]
-        ):
+        if not slack.verify(slack_signature, slack_request_timestamp, event["body"]):
             response = {"statusCode": 401, "body": "Unauthorized"}
             return response
 
@@ -46,31 +31,32 @@ def handle(event, context):
         cmd = body["text"][0]
         body = ""
         client = boto3.client("ec2")
-        resource = boto3.resource("ec2")
+        sns = boto3.client("sns")
         if cmd == constants.STATUS:
             body = _process_status(client)
         elif cmd == constants.DOWN:
             body = _process_down(client)
         elif cmd == constants.UP:
-            body = _process_up(client, resource)
+            body = _process_up(sns)
 
         response = {"text": body, "response_type": "in_channel"}
 
         return {"statusCode": 200, "body": json.dumps(response)}
 
     except Exception as e:
-        response = {"statusCode": 400, "body": f"Error: {e}"}
+        response = {"statusCode": 500, "body": f"Error: {e}"}
         return response
 
 
 def _process_down(client) -> str:
-    server = aws.find_devserver(client)
+    server = aws.find_devserver(client, non_terminated=True)
     if not server:
         return "No devserver found"
-    try:
-        client.stop_instances(InstanceIds=[server["InstanceId"]])
-    except Exception as e:
-        return f"Error stopping instance: `{e}``"
+
+    if server["State"]["Name"] != "running":
+        return "Server not running"
+
+    client.stop_instances(InstanceIds=[server["InstanceId"]])
     return "Stopping..."
 
 
@@ -81,14 +67,6 @@ def _process_status(client) -> str:
     return server["State"]["Name"]
 
 
-def _process_up(client, resource) -> str:
-    server = aws.find_devserver(client, non_terminated=True)
-    if server:
-        return "Server already running, can't start another one"
-    images = aws.get_images(client)
-    ami_id = constants.DEFAULT_IMAGE
-    if images["Images"]:
-        ami_id = images["Images"][0]["ImageId"]
-    aws.spawn_devserver(resource, ami_id)
-
-    return "Starting..."
+def _process_up(sns) -> str:
+    sns.publish(TopicArn=constants.SNS_TOPIC, Message=constants.UP)
+    return "Start request received!"
