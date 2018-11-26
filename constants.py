@@ -10,3 +10,4 @@ SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK")
 INSTANCE_TYPE = "t2.micro"
 SECURITY_GROUPS = os.environ.get("SECURITY_GROUPS").split(",")
 KEY_NAME = os.environ.get("KEY_NAME")
+DEFAULT_IMAGE = "ami-09479453c5cde9639"

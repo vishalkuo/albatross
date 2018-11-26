@@ -40,16 +40,19 @@ def handle(event, context):
 
         body = urlparse.parse_qs(event["body"])
         if not body["text"] or body["text"][0] not in constants.COMMANDS:
-            text = f"Invalid command, please try `{constants.COMMANDS}``"
+            text = f"Invalid command, please try `{constants.COMMANDS}`"
             return {"statusCode": 200, "body": json.dumps({"text": text})}
 
         cmd = body["text"][0]
         body = ""
         client = boto3.client("ec2")
+        resource = boto3.resource("ec2")
         if cmd == constants.STATUS:
             body = _process_status(client)
         elif cmd == constants.DOWN:
             body = _process_down(client)
+        elif cmd == constants.UP:
+            body = _process_up(client, resource)
 
         response = {"text": body, "response_type": "in_channel"}
 
@@ -76,3 +79,16 @@ def _process_status(client) -> str:
     if not server:
         return "Not found, please start"
     return server["State"]["Name"]
+
+
+def _process_up(client, resource) -> str:
+    server = aws.find_devserver(client, non_terminated=True)
+    if server:
+        return "Server already running, can't start another one"
+    images = aws.get_images(client)
+    ami_id = constants.DEFAULT_IMAGE
+    if images["Images"]:
+        ami_id = images["Images"][0]["ImageId"]
+    aws.spawn_devserver(resource, ami_id)
+
+    return "Starting..."
