@@ -3,7 +3,6 @@ import logging
 from typing import Optional
 import boto3
 import os
-import requests
 import constants
 import aws
 import slack
@@ -14,7 +13,7 @@ logger.setLevel(logging.WARNING)
 
 def handle(event, context):
     client = boto3.client("ec2")
-    logger.warn(f"Received event {event}")
+    logger.warning(f"Received event {event}")
     # From SNS
     if "Records" in event:
         _handle_records(client, event["Records"])
@@ -33,7 +32,7 @@ def handle(event, context):
 
 def _process_cron(client, event, server):
     images = aws.get_images(client, include_deleted=False)
-    if not images["Images"] or server["State"]["Name"] == "terminated":
+    if not images["Images"] or server["State"]["Name"] != "stopped":
         return {"statusCode": 200, "body": "noop"}
 
     image = images["Images"][0]
@@ -121,5 +120,5 @@ def _process_up(client, resource) -> str:
     mosh -I albatross ec2-user@{res[0].public_dns_name}
     ```"""
 
-    return s_str 
+    return s_str
 
