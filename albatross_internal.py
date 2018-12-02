@@ -115,7 +115,11 @@ def _process_up(client, resource) -> str:
     images = aws.get_images(client, include_deleted=False)
     if images["Images"]:
         ami_id = images["Images"][0]["ImageId"]
-    aws.spawn_devserver(resource, ami_id)
+    res = aws.spawn_devserver(resource, ami_id)
+    s_str = f"""devserver successfully started:
+    ```
+    mosh -I albatross ec2-user@{res[0].public_dns_name}
+    ```"""
 
-    return "devserver successfully started"
+    return s_str 
 
