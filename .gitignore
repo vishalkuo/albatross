@@ -4,3 +4,7 @@ env/
 .DS_STORE
 .vscode/
 __pycache__/
+*.pyc
+.terraform
+*.tfstate*
+
