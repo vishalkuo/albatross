@@ -53,6 +53,12 @@ def _process_instance_state_change(client, event, server):
     if server["InstanceId"] != event["detail"]["instance-id"]:
         return {"statusCode": 200, "body": "Irrelevant instance id"}
 
+    if event["detail"]["state"] == "running":
+        resource = boto3.resource("ec2")
+        instance = resource.Instance(event["detail"]["instance-id"])
+        _process_running(instance)
+        return {"statusCode": 200, "body": "processed running"}
+
     if event["detail"]["state"] != "stopped":
         return {"statusCode": 200, "body": "Irrelevant state"}
 
@@ -101,7 +107,8 @@ def _handle_records(client, records):
                 slack_str = _process_up(client, resource)
             except Exception as e:
                 slack_str = f"Couldn't start up server: {e}"
-            slack.post(slack_str)
+            if slack_str:
+                slack.post(slack_str)
 
 
 def _process_up(client, resource) -> str:
@@ -114,11 +121,14 @@ def _process_up(client, resource) -> str:
     images = aws.get_images(client, include_deleted=False)
     if images["Images"]:
         ami_id = images["Images"][0]["ImageId"]
-    res = aws.spawn_devserver(resource, ami_id)
+    aws.spawn_devserver(resource, ami_id)[0]
+
+    return ""
+
+
+def _process_running(instance) -> None:
     s_str = f"""devserver successfully started:
-    ```
-    mosh -I albatross ec2-user@{res[0].public_dns_name}
-    ```"""
-
-    return s_str
-
+```
+mosh -I albatross ec2-user@{instance.public_ip_address}
+```"""
+    slack.post(s_str)

@@ -79,12 +79,7 @@ class TestAlbatross(unittest.TestCase):
 
         self.assertEqual(200, resp["statusCode"])
         aws.spawn_devserver.assert_called_with(resource, constants.DEFAULT_IMAGE)
-        slack.post.assert_called_with(
-            """devserver successfully started:
-    ```
-    mosh -I albatross ec2-user@foobar.com
-    ```"""
-        )
+        slack.post.assert_not_called()
 
     def test_processess_sns_with_image(self, slack, boto3, constants, aws):
         constants.UP = "up"
@@ -102,12 +97,7 @@ class TestAlbatross(unittest.TestCase):
 
         self.assertEqual(200, resp["statusCode"])
         aws.spawn_devserver.assert_called_with(resource, "imageId")
-        slack.post.assert_called_with(
-            """devserver successfully started:
-    ```
-    mosh -I albatross ec2-user@foobar.com
-    ```"""
-        )
+        slack.post.assert_not_called()
 
     def test_processess_cron_with_running_server(self, slack, boto3, constants, aws):
         client = MagicMock()
@@ -205,7 +195,7 @@ class TestAlbatross(unittest.TestCase):
         aws.find_devserver.return_value = server
 
         resp = albatross_internal.handle(
-            get_state_change(server["InstanceId"], "running"), None
+            get_state_change(server["InstanceId"], "terminated"), None
         )
 
         self.assertEqual(200, resp["statusCode"])
@@ -213,7 +203,7 @@ class TestAlbatross(unittest.TestCase):
         aws.create_image.assert_not_called()
         client.create_tags.assert_not_called()
 
-    def test_processess_state_change_for_relevant_state_and_server(
+    def test_processess_state_change_for_stopping_state_and_server(
         self, slack, boto3, constants, aws
     ):
         client = MagicMock()
@@ -234,4 +224,31 @@ class TestAlbatross(unittest.TestCase):
             Resources=["id2"],
             Tags=[{"Key": "application", "Value": constants.DEVSERVER}],
         )
+
+    def test_processess_state_change_for_running_state_and_server(
+        self, slack, boto3, constants, aws
+    ):
+        client = MagicMock()
+        boto3.client.return_value = client
+        resource = MagicMock()
+        boto3.resource.return_value = resource
+        server = helper.get_mock_server(state="running")
+        aws.find_devserver.return_value = server
+        refreshed_server = MagicMock()
+        refreshed_server.public_ip_address = "foobar.com"
+        resource.Instance.return_value = refreshed_server
+
+        resp = albatross_internal.handle(
+            get_state_change(server["InstanceId"], "running"), None
+        )
+
+        self.assertEqual(200, resp["statusCode"])
+        slack.post.assert_called_with(
+            """devserver successfully started:
+```
+mosh -I albatross ec2-user@foobar.com
+```"""
+        )
+        aws.create_image.assert_not_called()
+        client.create_tags.assert_not_called()
 
