@@ -27,7 +27,7 @@ I've tried to recreate my setup for AWS in the `terraform` directory but it's fa
 
 - the same sns topic `albatross` produces to
 - a Cloudwatch scheduled event that runs every 5 minutes. This event allows albatross to poll for changes to AMI availability and to terminate an instance once the AMI has baked
-- a Cloudwatch event that occurs whenever an EC2 instance transitions into the `stopped` state
+- a Cloudwatch event that occurs whenever an EC2 instance transitions into the `stopped` or `running` states
 
 ### Slack
 
