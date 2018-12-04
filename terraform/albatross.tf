@@ -12,8 +12,6 @@ resource "aws_lambda_function" "albatross" {
 
   environment {
     variables = {
-      KEY_NAME = "${var.key_name}",
-      SECURITY_GROUPS = "${var.security_groups}",
       SLACK_KEY = "${var.slack_key}",
       SNS_TOPIC = "${var.sns_topic}"
     }

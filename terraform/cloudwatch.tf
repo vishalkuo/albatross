@@ -20,7 +20,8 @@ resource "aws_cloudwatch_event_rule" "albatross_state_change" {
         ],
         "detail": {
             "state": [
-                "stopped"
+                "stopped",
+                "running"
             ]
         }
     }
